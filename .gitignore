@@ -1,0 +1,24 @@
+# Data Ñ never commit
+data/raw/
+data/processed/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+
+# uv
+.uv/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# MLflow
+mlflow/mlruns/
+mlflow/*.db
+
+# OS
+.DS_Store
