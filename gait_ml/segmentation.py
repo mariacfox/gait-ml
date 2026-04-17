@@ -1,5 +1,5 @@
 """
-segmentation.py Ñ Gait event detection and cycle segmentation.
+segmentation.py â€” Gait event detection and cycle segmentation.
 
 Primary method: GRF threshold crossing (requires force plate data).
 Heel strike = vertical GRF crosses threshold going up.
@@ -8,16 +8,20 @@ Toe off = vertical GRF crosses threshold going down.
 
 import numpy as np
 
-
-DEFAULT_GRF_THRESHOLD_N: float = 20.0  # Newtons Ñ standard lab threshold
+from gait_ml.config import DEFAULT_LAB_CONFIG as _CFG
 
 
 def detect_gait_events_grf(
     vertical_grf: np.ndarray,
     sample_rate_hz: float,
-    threshold_n: float = DEFAULT_GRF_THRESHOLD_N,
+    threshold_n: float = _CFG.gait_events.threshold_n,
+    min_peak_n: float = _CFG.gait_events.min_stance_peak_n,
 ) -> dict[str, np.ndarray]:
     """Detect heel strike and toe-off events from vertical GRF.
+
+    Implements ``gaitEventDetection.m``: threshold crossings identify candidate
+    stances; stances whose peak force is below ``min_peak_n`` are discarded as
+    foot crossover or treadmill artifact.
 
     Parameters
     ----------
@@ -26,21 +30,40 @@ def detect_gait_events_grf(
     sample_rate_hz : float
         Force plate sampling rate in Hz.
     threshold_n : float
-        Force threshold in Newtons. Default 20N is standard for lab data.
+        Force threshold in Newtons for stance detection. Confirmed 15 N from MATLAB.
+    min_peak_n : float
+        Minimum peak force in Newtons for a valid stance. Confirmed 150 N from MATLAB.
+        Stances below this are discarded (foot crossover / artifact filter).
 
     Returns
     -------
     dict
-        Keys 'heel_strike' and 'toe_off', values are arrays of frame indices.
+        Keys ``'heel_strike'`` and ``'toe_off'``, values are arrays of frame
+        indices for valid stances only.
     """
     above = vertical_grf > threshold_n
     above_int = above.astype(int)
     diff = np.diff(above_int)
 
-    heel_strikes = np.where(diff == 1)[0] + 1   # rising edge
-    toe_offs = np.where(diff == -1)[0] + 1       # falling edge
+    hs_candidates = np.where(diff == 1)[0] + 1   # rising edge
+    to_candidates = np.where(diff == -1)[0] + 1  # falling edge
 
-    return {"heel_strike": heel_strikes, "toe_off": toe_offs}
+    # Pair each heel strike with the next toe-off, then apply peak filter
+    heel_strikes = []
+    toe_offs = []
+    for hs in hs_candidates:
+        subsequent = to_candidates[to_candidates > hs]
+        if len(subsequent) == 0:
+            break
+        to = subsequent[0]
+        if np.max(vertical_grf[hs:to]) >= min_peak_n:
+            heel_strikes.append(hs)
+            toe_offs.append(to)
+
+    return {
+        "heel_strike": np.array(heel_strikes, dtype=int),
+        "toe_off": np.array(toe_offs, dtype=int),
+    }
 
 
 def extract_gait_cycles(

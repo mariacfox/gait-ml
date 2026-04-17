@@ -1,5 +1,5 @@
 """
-grf.py Ñ Ground reaction force feature extraction.
+grf.py â€” Ground reaction force feature extraction.
 
 All peak and impulse features are normalized to body weight (BW) by default.
 Body weight in Newtons must be provided (pull from demographics via io.py).
@@ -31,7 +31,7 @@ def extract_grf_features(
         Feature dictionary with keys:
         - peak_vgrf_bw: peak vertical GRF normalized to body weight
         - loading_rate_bw_s: average loading rate (BW/s) over first 20% of stance
-        - impulse_bw_s: GRF impulse normalized to body weight (BWás)
+        - impulse_bw_s: GRF impulse normalized to body weight (BWÂ·s)
         - contact_time_s: stance duration in seconds
         - impact_peak_bw: first local maximum (impact transient), if present
     """
@@ -99,7 +99,7 @@ def extract_cop_features(
     cov = np.cov(cop_x, cop_y)
     eigenvalues = np.linalg.eigvalsh(cov)
     # 95% CI ellipse area: pi * F_95 * sqrt(lambda1 * lambda2)
-    # F_95 for 2 df Å 5.991
+    # F_95 for 2 df â‰ˆ 5.991
     area = np.pi * 5.991 * np.sqrt(np.maximum(eigenvalues[0], 0) * np.maximum(eigenvalues[1], 0))
 
     return {

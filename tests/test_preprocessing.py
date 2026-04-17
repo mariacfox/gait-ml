@@ -1,4 +1,4 @@
-"""Tests for preprocessing.py Ñ validate against expected MATLAB behavior."""
+"""Tests for preprocessing.py â€” validate against expected MATLAB behavior."""
 
 import numpy as np
 import pytest
@@ -24,7 +24,7 @@ def test_butterworth_preserves_shape_2d():
 def test_butterworth_attenuates_high_frequency():
     """Filter should reduce amplitude of a high-frequency sine wave."""
     t = np.linspace(0, 2, 200)
-    high_freq = np.sin(2 * np.pi * 30 * t)  # 30 Hz Ñ well above 6 Hz cutoff
+    high_freq = np.sin(2 * np.pi * 30 * t)  # 30 Hz â€” well above 6 Hz cutoff
     filtered = butterworth_lowpass(high_freq, cutoff_hz=6.0, sample_rate_hz=100.0)
     assert np.std(filtered) < 0.1 * np.std(high_freq)
 

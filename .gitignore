@@ -1,4 +1,4 @@
-# Data Ñ never commit
+# Data - never commit
 data/raw/
 data/processed/
 
@@ -19,6 +19,10 @@ dist/
 # MLflow
 mlflow/mlruns/
 mlflow/*.db
+
+# IDE
+.idea/
+.vscode/
 
 # OS
 .DS_Store

@@ -1,5 +1,5 @@
 """
-features.py Ñ Feature matrix assembly across subjects and conditions.
+features.py â€” Feature matrix assembly across subjects and conditions.
 
 Assembles the tabular feature matrix used in Phase 2 ML classification.
 Each row = one gait cycle. Columns = extracted features + metadata.

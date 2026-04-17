@@ -10,7 +10,7 @@ A Python pipeline for processing 3D motion capture and force plate data from mul
 - Standing balance trials (center of pressure)
 - Standing pose captures
 
-Data includes 3D marker trajectories (QualityAssist CSV output), synchronized force plate GRF data, and subject demographics.
+Data includes 3D marker trajectories (Qualisys CSV output), synchronized force plate GRF data, and subject demographics.
 
 ## Project structure
 
@@ -18,8 +18,8 @@ Data includes 3D marker trajectories (QualityAssist CSV output), synchronized fo
 gait_ml/          Python biomechanics pipeline package
 notebooks/        Exploratory analysis and validation
 tests/            pytest test suite
-data/raw/         Raw CSVs Ñ gitignored
-data/processed/   Pipeline output Ñ gitignored
+data/raw/         Raw CSVs â€” gitignored
+data/processed/   Pipeline output â€” gitignored
 ```
 
 ## Setup
@@ -32,7 +32,7 @@ uv run jupyter lab
 
 ## Phases
 
-- **Phase 1 (current):** Python biomechanics pipeline Ñ filtering, joint angle computation, GRF feature extraction
+- **Phase 1 (current):** Python biomechanics pipeline â€” filtering, joint angle computation, GRF feature extraction
 - **Phase 2:** ML classification of speed condition (sklearn baseline, leave-one-subject-out CV, MLflow tracking)
 - **Phase 3:** PyTorch sequence model (1D CNN / LSTM on time-normalized waveforms)
 
