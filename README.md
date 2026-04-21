@@ -219,33 +219,31 @@ This is exactly analogous to group k-fold cross-validation in scikit-learn
 
 ```
 gait_ml/
+  config.py         Lab equipment and acquisition parameters
   io.py             Load Qualisys TSV files (markers + force plates)
   preprocessing.py  Butterworth filtering, pchip gap-fill, time normalization
   segmentation.py   Heel strike / toe-off detection from GRF threshold
-  dataset.py        PyTorch Dataset, CONDITION_LABELS, add_speed_column, kfold_splits helper
+  dataset.py        PyTorch Dataset, kfold_splits, label maps, speed column helper
   models.py         ConvBlock, ResBlock, GRFEncoder, MarkerEncoder,
                     GRFOnly/MarkerOnly/TwoTower × Classifier + Regressor
-  train.py          Training loop, evaluation, CV fold runners (classification + regression)
-  kinematics.py     Joint angle computation (traditional pipeline, preserved)
-  grf.py            GRF feature extraction (traditional pipeline, preserved)
-  features.py       Feature matrix assembly (traditional pipeline, preserved)
-  config.py         Lab equipment and acquisition parameters
+  train.py          Training loop, early stopping, CV fold runners (classification + regression)
 
 scripts/
-  build_dataset.py  Preprocess all trials → time-normalized cycle cache
-  run_cv.py         k-fold (or LOSO) cross-validation for classification or regression
+  build_dataset.py  Preprocess raw TSVs → time-normalized gait cycle cache
+  run_cv.py         10-fold subject-level CV for classification or regression
+  train_all.sh      Train all 6 model variants in one call (25% subsample)
 
 notebooks/
-  01_io_preprocessing_smoke_test.ipynb
-  02_preprocessing_validation.ipynb       Python vs MATLAB output comparison
-  03_results_classification.ipynb         Ablation table, per-condition accuracy, confusion matrix
-  03_results_regression.ipynb             Ablation table, predicted vs actual, per-condition RMSE
+  03_results_classification.ipynb   Ablation table, confusion matrix, Captum attribution
+  03_results_regression.ipynb       Ablation table, predicted vs actual, Captum attribution
 
-tests/              pytest suite for kinematics, preprocessing, segmentation, GRF
+tests/
+  test_preprocessing.py   Butterworth filter and gap-fill validation
+  test_segmentation.py    GRF event detection validation
 ```
 
-The traditional biomechanics pipeline (kinematics, hand-crafted features,
-MATLAB validation) is preserved on the `traditional-pipeline` branch.
+The traditional biomechanics pipeline (joint angle computation, hand-crafted GRF features,
+MATLAB validation notebooks) is preserved on the `traditional-pipeline` branch.
 
 ---
 
@@ -259,25 +257,25 @@ uv sync
 uv run pytest
 
 # Step 1: preprocess all trials into a cycle cache (~5–10 min for 70 subjects)
-uv run python scripts/build_dataset.py --raw-dir data/raw --out-dir data/processed
+# Default layout: Data/sub{ID}/_tsv/ subdirectories
+uv run python scripts/build_dataset.py --data-root /path/to/Qualisys/Data --out-dir data/processed
 
-# Step 1 (single subject, for debugging)
-uv run python scripts/build_dataset.py --raw-dir data/raw --subjects FS6
+# Step 1 (flat data/raw/ directory — local dev layout)
+uv run python scripts/build_dataset.py --data-root data/raw --flat --subjects FS6
 
-# Step 2: train models — 3-class classification (walking / slow run / fast run)
-uv run python scripts/run_cv.py --task classification --n-classes 3 --model grf_only
-uv run python scripts/run_cv.py --task classification --n-classes 3 --model marker_only
-uv run python scripts/run_cv.py --task classification --n-classes 3 --model two_tower
+# Step 2: train all 6 models at once (25% subsample — used for all reported results)
+bash scripts/train_all.sh
 
-# Step 2: train models — regression (requires d_subjectData.csv for actual speeds)
-uv run python scripts/run_cv.py --task regression --subject-data data/raw/d_subjectData.csv --model grf_only
-uv run python scripts/run_cv.py --task regression --subject-data data/raw/d_subjectData.csv --model marker_only
-uv run python scripts/run_cv.py --task regression --subject-data data/raw/d_subjectData.csv --model two_tower
+# Or train individual models:
+# Classification (walking / slow run / fast run)
+uv run python scripts/run_cv.py --task classification --n-classes 3 --n-folds 10 --subsample-frac 0.25 --model grf_only
+uv run python scripts/run_cv.py --task classification --n-classes 3 --n-folds 10 --subsample-frac 0.25 --model marker_only
+uv run python scripts/run_cv.py --task classification --n-classes 3 --n-folds 10 --subsample-frac 0.25 --model two_tower
 
-# Low-memory run (25% of cycles) — used for all reported results
-uv run python scripts/run_cv.py --task classification --n-classes 3 --subsample-frac 0.25 --model two_tower
-uv run python scripts/run_cv.py --task regression --subject-data data/raw/d_subjectData.csv \
-    --subsample-frac 0.25 --model two_tower
+# Regression (predict speed in m/s — requires d_subjectData.csv for actual speeds)
+uv run python scripts/run_cv.py --task regression --n-folds 10 --subsample-frac 0.25 --subject-data data/raw/d_subjectData.csv --model grf_only
+uv run python scripts/run_cv.py --task regression --n-folds 10 --subsample-frac 0.25 --subject-data data/raw/d_subjectData.csv --model marker_only
+uv run python scripts/run_cv.py --task regression --n-folds 10 --subsample-frac 0.25 --subject-data data/raw/d_subjectData.csv --model two_tower
 ```
 
 ---
@@ -338,27 +336,32 @@ whether the model recovers this is an open empirical question.
 The regression task sidesteps this entirely by predicting actual speed in m/s,
 which is a well-defined target regardless of condition label.
 
-Results pending — run the classification commands above and open
-`notebooks/03_results_classification.ipynb`.
+| Model | Mean accuracy | Std | Min | Max |
+|---|---|---|---|---|
+| GRF only | 98.9% | 0.9% | 97.4% | 99.8% |
+| Markers only | **99.8%** | 0.6% | 98.1% | 100.0% |
+| Two-Tower (fused) | 99.7% | 0.8% | 97.6% | 100.0% |
+
+Key findings:
+- All three models exceed 98.9% — the 3-class grouping is a relatively easy problem given the large biomechanical differences between walking and running.
+- **Markers-only edges out fusion** (99.8% vs 99.7%). The GRF encoder does not meaningfully help the Two-Tower model on classification, likely because the walking/running distinction is already fully encoded in kinematics.
+- **GRF alone is sufficient** for high accuracy (98.9%), confirming that force patterns are strongly discriminative — but leaves a small gap relative to kinematics.
+- Per-fold variance is low across all models (std < 1%), indicating consistent generalisation across the 10 subject groups.
+
+See `notebooks/03_results_classification.ipynb` for confusion matrices, per-class accuracy, and Captum attribution plots.
 
 ### Speed regression (predict m/s from a single gait cycle)
 
 | Model | RMSE (m/s) | MAE (m/s) | R² |
 |---|---|---|---|
-| GRF only | 0.120 ± 0.064 | 0.093 ± 0.049 | 0.983 ± 0.018 |
-| Markers only | 0.075 ± 0.051 | 0.058 ± 0.040 | 0.993 ± 0.012 |
-| Two-Tower (fused) | **0.075 ± 0.037** | 0.058 ± 0.029 | **0.993 ± 0.007** |
+| GRF only | 0.235 ± 0.041 | 0.147 ± 0.031 | 0.951 ± 0.016 |
+| Markers only | **0.110 ± 0.037** | **0.071 ± 0.019** | **0.989 ± 0.007** |
+| Two-Tower (fused) | 0.112 ± 0.030 | 0.072 ± 0.015 | **0.989 ± 0.005** |
 
 Key findings:
-- All three models achieve R² > 0.98 — speed is highly predictable from gait
-  waveforms, which is expected given the large dynamic range (walk ~1.0–1.6 m/s
-  vs. run ~2.5–4.0 m/s).
-- **Markers outperform GRF alone** (RMSE 0.075 vs 0.120 m/s). Kinematics carry
-  more consistent speed information across subjects; GRF is confounded by body
-  weight variation.
-- **Fusion reduces variance rather than mean error.** The Two-Tower model's fold
-  std drops from 0.051 to 0.037 relative to Markers-only — it generalizes more
-  reliably across subjects even when the mean RMSE is similar.
+- **Markers substantially outperform GRF** (RMSE 0.110 vs 0.235 m/s; R² 0.989 vs 0.951). Kinematics encode speed more directly and consistently across subjects; GRF is confounded by body weight variation and normalisation differences.
+- **Fusion matches markers but reduces variance.** Two-Tower achieves the same mean RMSE as Markers-only but with lower fold std (0.030 vs 0.037), meaning it generalises more reliably across subjects — even when the average error is similar.
+- GRF alone reaches R² = 0.951, which is still reasonable given the wide speed range (walk ~1.0–1.6 m/s, run ~2.5–4.0 m/s), but noticeably worse than kinematics for within-condition speed discrimination.
 
 ### Could simple linear regression get the same results?
 
@@ -376,6 +379,14 @@ Probably not at the same accuracy, for two reasons:
    only ~0.1–0.2 m/s and scalar features overlap heavily. The CNN picks up on
    subtle waveform shape differences (peak timing, loading-rate curvature) that
    are hard to hand-engineer.
+
+### Explainability: Integrated Gradients via Captum
+
+Both results notebooks include an attribution analysis using [Captum](https://captum.ai), PyTorch's model interpretability library. The specific method is **Integrated Gradients** (Sundararajan et al., 2017), which attributes a prediction to each input feature by accumulating gradients along a path from a zero baseline to the actual input. The result is a map of the same shape as the input — `(3, 101)` for GRF, `(90, 101)` for markers — showing which time points and channels drove each prediction.
+
+This is roughly the deep learning equivalent of [SHAP](https://shap.readthedocs.io) values for tree models: both answer "which input features contributed most to this output?" SHAP uses Shapley values from cooperative game theory; Integrated Gradients uses gradient integration along a linear interpolation path. The practical difference is that IG operates directly on the raw time-series tensors, returning a full waveform attribution rather than a scalar per feature.
+
+I'm actively exploring how useful this is in practice. The attribution plots are interpretable at a high level — stance peaks light up for running, walking attributions are broadly distributed — but the absolute scale is sensitive to the choice of baseline and number of integration steps, and it's not yet clear how much diagnostic value they add beyond what you'd infer from the waveform shapes alone.
 
 See `notebooks/03_results_regression.ipynb` and
 `notebooks/03_results_classification.ipynb` for full plots and ablation tables.
