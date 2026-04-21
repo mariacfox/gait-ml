@@ -26,3 +26,8 @@ mlflow/*.db
 
 # OS
 .DS_Store
+/checkpoints
+mlflow.db
+PLAN.md
+*.csv
+*.png
